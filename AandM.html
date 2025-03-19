@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Love Scan</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet"></script>
     <style>
         /* Love-Themed CSS */
         body {
@@ -65,6 +63,8 @@
             border-radius: 15px;
         }
     </style>
+    <!-- OpenCV.js for Edge Detection -->
+    <script async src="https://docs.opencv.org/master/opencv.js"></script>
 </head>
 <body>
     <h1>❤ Scan an Image ❤</h1>
@@ -82,83 +82,114 @@
         let ctx = canvas.getContext("2d");
         let photo = document.getElementById("photo");
         let audio = document.getElementById("audio");
-        let model;
 
         // Start rear camera
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-        .then(stream => video.srcObject = stream)
-        .catch(err => console.error("Camera access denied:", err));
+        navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: "environment" } 
+        }).then(stream => {
+            video.srcObject = stream;
+        }).catch(err => console.error("Camera access denied:", err));
 
-        // Load MobileNet model for object detection
-        async function loadModel() {
-            model = await mobilenet.load();
-            console.log("MobileNet model loaded!");
-        }
-        loadModel();
-
-        // Capture image
+        // Capture Image
         function captureImage() {
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            analyzeImage();
-        }
-
-        // Analyze Image
-        async function analyzeImage() {
-            let bgColor = detectBackgroundColor();
-            let isGirlDetected = await detectGirl();
-
-            console.log("Detected Background:", bgColor);
-            console.log("Girl Detected:", isGirlDetected);
-
-            if (bgColor === "orange" && isGirlDetected) {
-                displayResult("photo1.jpg", "song1.mp3");
-            } else if (bgColor === "pink" && isGirlDetected) {
-                displayResult("photo2.jpg", "song2.mp3");
-            } else {
-                alert("No matching image found!");
-            }
-        }
-
-        // Detect dominant background color
-        function detectBackgroundColor() {
-            let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-            let colorCounts = {};
             
-            for (let i = 0; i < imageData.length; i += 4) {
-                let r = imageData[i];
-                let g = imageData[i + 1];
-                let b = imageData[i + 2];
+            let capturedImage = canvas.toDataURL("image/png");
+            compareImage(capturedImage);
+        }
 
-                let color = `rgb(${r},${g},${b})`;
-                colorCounts[color] = (colorCounts[color] || 0) + 1;
+        // Compare scanned image with stored images
+        async function compareImage(capturedImage) {
+            let img = await loadImage(capturedImage);
+            
+            // Detect background color
+            let color = getDominantColor(img);
+            
+            // Check if the image is a drawing
+            let isDrawing = await detectEdges(img);
+
+            if (isDrawing) {
+                if (color === "orange") {
+                    displayResult("photo1.jpg", "song1.mp3"); // Image1 detected
+                } else if (color === "pink") {
+                    displayResult("photo2.jpg", "song2.mp3"); // Image2 detected
+                } else {
+                    alert("Drawing detected but background color doesn't match!");
+                }
+            } else {
+                alert("No drawing detected!");
             }
+        }
 
-            let dominantColor = Object.keys(colorCounts).reduce((a, b) => colorCounts[a] > colorCounts[b] ? a : b);
+        // Load image from the captured image
+        function loadImage(src) {
+            return new Promise((resolve) => {
+                let img = new Image();
+                img.crossOrigin = "Anonymous";
+                img.src = src;
+                img.onload = () => resolve(img);
+            });
+        }
 
-            console.log("Dominant Color RGB:", dominantColor);
+        // Extract Dominant Color
+        function getDominantColor(img) {
+            let canvas = document.createElement("canvas");
+            let ctx = canvas.getContext("2d");
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+            
+            let pixelData = ctx.getImageData(0, 0, img.width, img.height).data;
+            let r = 0, g = 0, b = 0, count = 0;
+            
+            for (let i = 0; i < pixelData.length; i += 4) {
+                r += pixelData[i];
+                g += pixelData[i + 1];
+                b += pixelData[i + 2];
+                count++;
+            }
+            
+            r /= count; g /= count; b /= count;
 
-            if (dominantColor.includes("255,165,0")) return "orange";  // Orange (approximate RGB)
-            if (dominantColor.includes("255,192,203")) return "pink";  // Pink (approximate RGB)
-
+            if (r > 200 && g < 100 && b < 100) return "orange";
+            if (r > 200 && g > 100 && b > 150) return "pink";
+            
             return "unknown";
         }
 
-        // Detect if a girl is in the image
-        async function detectGirl() {
-            let predictions = await model.classify(canvas);
-            console.log("Predictions:", predictions);
+        // Edge Detection using OpenCV.js
+        async function detectEdges(img) {
+            return new Promise(resolve => {
+                let tempCanvas = document.createElement("canvas");
+                let tempCtx = tempCanvas.getContext("2d");
+                tempCanvas.width = img.width;
+                tempCanvas.height = img.height;
+                tempCtx.drawImage(img, 0, 0);
 
-            for (let pred of predictions) {
-                if (pred.className.toLowerCase().includes("girl") || pred.className.toLowerCase().includes("person")) {
-                    return true;
+                let src = cv.imread(tempCanvas);
+                let gray = new cv.Mat();
+                let edges = new cv.Mat();
+                cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+                cv.Canny(gray, edges, 50, 150);
+                
+                let edgePixels = 0;
+                let totalPixels = edges.cols * edges.rows;
+                
+                for (let i = 0; i < edges.data.length; i++) {
+                    if (edges.data[i] > 0) edgePixels++;
                 }
-            }
-            return false;
+                
+                src.delete();
+                gray.delete();
+                edges.delete();
+                
+                resolve(edgePixels / totalPixels > 0.05); // If >5% pixels are edges, assume it's a drawing
+            });
         }
 
-        // Display result
+        // Display Photo & Play Song
         function displayResult(photoSrc, audioSrc) {
             photo.src = photoSrc;
             photo.style.display = "block";
