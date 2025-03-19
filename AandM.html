@@ -106,9 +106,9 @@
             let similarity1 = await imageSimilarity(capturedImage, image1);
             let similarity2 = await imageSimilarity(capturedImage, image2);
 
-            if (similarity1 > 0.4) {
+            if (similarity1 > 0.05) {
                 displayResult("photo1.jpg", "song1.mp3");
-            } else if (similarity2 > 0.4) {
+            } else if (similarity2 > 0.05) {
                 displayResult("photo2.jpg", "song2.mp3");
             } else {
                 alert("No match found!");
