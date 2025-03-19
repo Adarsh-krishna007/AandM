@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Love Scan</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <style>
         /* Love-Themed CSS */
         body {
@@ -95,6 +96,7 @@
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             
             let capturedImage = canvas.toDataURL("image/png");
+            console.log("Captured Image:", capturedImage); // Debugging
             compareImage(capturedImage);
         }
 
@@ -106,45 +108,54 @@
             let similarity1 = await imageSimilarity(capturedImage, image1);
             let similarity2 = await imageSimilarity(capturedImage, image2);
 
-            if (similarity1 > 0.05) {
+            console.log("Similarity 1:", similarity1); // Debugging
+            console.log("Similarity 2:", similarity2); // Debugging
+
+            if (similarity1 > 0.1) {
                 displayResult("photo1.jpg", "song1.mp3");
-            } else if (similarity2 > 0.05) {
+            } else if (similarity2 > 0.1) {
                 displayResult("photo2.jpg", "song2.mp3");
             } else {
                 alert("No match found!");
             }
         }
 
-        // Load image from the project directory
-        function loadImage(src) {
-            return new Promise((resolve) => {
-                let img = new Image();
-                img.crossOrigin = "Anonymous";
-                img.src = src;
-                img.onload = () => resolve(img);
-            });
+        // Load image from the project directory (fixes CORS issues)
+        async function loadImage(src) {
+            let response = await fetch(src);
+            let blob = await response.blob();
+            let img = new Image();
+            img.src = URL.createObjectURL(blob);
+            return new Promise(resolve => img.onload = () => resolve(img));
         }
 
         // Compare two images using pixel similarity
         async function imageSimilarity(img1, img2) {
-            let tensor1 = tf.browser.fromPixels(await createImageCanvas(img1));
-            let tensor2 = tf.browser.fromPixels(await createImageCanvas(img2));
+            let tensor1 = await processImage(img1);
+            let tensor2 = await processImage(img2);
 
-            let diff = tf.losses.meanSquaredError(tensor1, tensor2).dataSync();
+            let diff = tf.losses.meanSquaredError(tensor1, tensor2).dataSync()[0];
             tensor1.dispose();
             tensor2.dispose();
 
-            return 1 - diff;  // Closer to 1 means more similar
+            return 1 - diff; // Closer to 1 means more similar
         }
 
-        // Create canvas for image processing
-        async function createImageCanvas(img) {
+        // Preprocess image: Convert to grayscale & resize
+        async function processImage(img) {
             let tempCanvas = document.createElement("canvas");
             let ctx = tempCanvas.getContext("2d");
-            tempCanvas.width = img.width;
-            tempCanvas.height = img.height;
-            ctx.drawImage(img, 0, 0);
-            return tempCanvas;
+            tempCanvas.width = 100;
+            tempCanvas.height = 100;
+            ctx.drawImage(img, 0, 0, 100, 100);
+
+            let tensor = tf.browser.fromPixels(tempCanvas)
+                .resizeNearestNeighbor([100, 100])
+                .mean(2)  // Convert to grayscale
+                .toFloat()
+                .expandDims(0);  // Expand to match dimensions
+
+            return tensor;
         }
 
         // Display photo & play song
