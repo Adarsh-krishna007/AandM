@@ -112,7 +112,7 @@ let photo = document.getElementById("photo");
 let audio = document.getElementById("audio");
 
 // Start camera
-navigator.mediaDevices.getUserMedia({ video: true })
+navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
     .then(stream => { video.srcObject = stream; })
     .catch(err => console.error("Camera access denied:", err));
 
