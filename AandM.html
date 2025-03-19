@@ -63,8 +63,6 @@
             border-radius: 15px;
         }
     </style>
-    <!-- OpenCV.js for Edge Detection -->
-    <script async src="https://docs.opencv.org/master/opencv.js"></script>
 </head>
 <body>
     <h1>❤ Scan an Image ❤</h1>
@@ -106,20 +104,13 @@
             
             // Detect background color
             let color = getDominantColor(img);
-            
-            // Check if the image is a drawing
-            let isDrawing = await detectEdges(img);
 
-            if (isDrawing) {
-                if (color === "orange") {
-                    displayResult("photo1.jpg", "song1.mp3"); // Image1 detected
-                } else if (color === "pink") {
-                    displayResult("photo2.jpg", "song2.mp3"); // Image2 detected
-                } else {
-                    alert("Drawing detected but background color doesn't match!");
-                }
+            if (color === "orange") {
+                displayResult("photo1.jpg", "song1.mp3"); // Image1 detected
+            } else if (color === "pink") {
+                displayResult("photo2.jpg", "song2.mp3"); // Image2 detected
             } else {
-                alert("No drawing detected!");
+                alert("Color does not match!");
             }
         }
 
@@ -157,36 +148,6 @@
             if (r > 200 && g > 100 && b > 150) return "pink";
             
             return "unknown";
-        }
-
-        // Edge Detection using OpenCV.js
-        async function detectEdges(img) {
-            return new Promise(resolve => {
-                let tempCanvas = document.createElement("canvas");
-                let tempCtx = tempCanvas.getContext("2d");
-                tempCanvas.width = img.width;
-                tempCanvas.height = img.height;
-                tempCtx.drawImage(img, 0, 0);
-
-                let src = cv.imread(tempCanvas);
-                let gray = new cv.Mat();
-                let edges = new cv.Mat();
-                cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-                cv.Canny(gray, edges, 50, 150);
-                
-                let edgePixels = 0;
-                let totalPixels = edges.cols * edges.rows;
-                
-                for (let i = 0; i < edges.data.length; i++) {
-                    if (edges.data[i] > 0) edgePixels++;
-                }
-                
-                src.delete();
-                gray.delete();
-                edges.delete();
-                
-                resolve(edgePixels / totalPixels > 0.05); // If >5% pixels are edges, assume it's a drawing
-            });
         }
 
         // Display Photo & Play Song
